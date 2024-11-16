@@ -25,8 +25,8 @@ SOFTWARE.
 
 #include <iostream>
 #include <cstring>
-
-
+#include <set>
+#include <map>
 #define ERROR(...) do{fprintf(stderr,__VA_ARGS__);system("pause");exit(-1);}while(0)
 
 #pragma pack(push, 1)
@@ -294,7 +294,14 @@ public:
         common_ptr->pages++;
         return page_index;
     }
-
+    void dumpChars() {
+        std::cout << "    charset=" << (int)(info_ptr->charSet) << "\n";
+        for (int i = 0; i < CharCount(); i++) {
+            chars* ch = &chars_ptr[i];
+            std::cout << "           id=" << ch->id << " x=" << ch->x << ",y=" << ch->y << ",w=" << ch->width << ",h=" << ch->height << " "
+                " xoff=" << ch->xoffset << ",yoff=" << ch->yoffset << ",xadv=" << ch->xadvance << ", page=" << (int)(ch->page) << " chnl=" << (int)(ch->chnl) << "\n";
+        }
+    }
     void SaveToFile(const char* fileName) {
         FILE* f = fopen(fileName, "wb");
         if (f == NULL) {
@@ -344,15 +351,73 @@ public:
     void ReplaceCharsUse(FntFile* other) {
         int myCount = CharCount();
         int oCount = other->CharCount();
+
+        std::vector<std::string> this_page_names, other_page_names;
+        pageNameToVec(this_page_names);
+        other->pageNameToVec(other_page_names);
+
+        std::map<std::string, int> page_name_to_int;
+
+        std::set<unsigned int> handled;
         for (int i = 0; i < myCount; i++) {
             for (int j = 0; j < oCount; j++) {
                 if (chars_ptr[i].id == other->chars_ptr[j].id) {
+                    handled.insert(chars_ptr[i].id);
                     //replace
                     memcpy(&chars_ptr[i], &(other->chars_ptr[j]), sizeof(chars));
-                    chars_ptr[i].page = AddOrGetPage(other->GetPageName(chars_ptr[i].page));
+                    int page;
+                    auto other_page_name = other_page_names[other->chars_ptr[j].page];
+                    auto it = page_name_to_int.find(other_page_name);
+                    if (it == page_name_to_int.end()) {
+                        page = this_page_names.size();
+                        this_page_names.push_back(other_page_name);
+                        page_name_to_int[other_page_name] = page;
+                    }
+                    else {
+                        page = it->second;
+                    }
+                    chars_ptr[i].page = page;
                 }
             }
         }
+
+        std::vector<chars> toBeAdded;
+        for (int j = 0; j < oCount; j++) {
+            auto idx = other->chars_ptr[j].id;
+            if (handled.count(idx))
+                continue;
+            chars ch = other->chars_ptr[j];
+            int page;
+            auto other_page_name = other_page_names[ch.page];
+            auto it = page_name_to_int.find(other_page_name);
+            if (it == page_name_to_int.end()) {
+                page = this_page_names.size();
+                this_page_names.push_back(other_page_name);
+                page_name_to_int[other_page_name] = page;
+            }
+            else {
+                page = it->second;
+            }
+            ch.page = page;
+            toBeAdded.push_back(ch);
+        }
+
+        {
+            size_t new_char_count = CharCount() + toBeAdded.size();
+            chars* new_chars = (chars*)malloc(new_char_count * sizeof(chars));
+            if (new_chars == NULL)
+                ERROR("malloc failed.");
+            memcpy(new_chars, chars_ptr, CharCount() * sizeof(chars));
+            for (auto i = 0; i < toBeAdded.size(); i++) {
+                new_chars[CharCount() + i] = toBeAdded[i];
+            }
+            free(chars_ptr);
+            chars_ptr = new_chars;
+            chars_sz = new_char_count * sizeof(chars);
+        }
+
+        vecToPageName(this_page_names);
+        common_ptr->pages = this_page_names.size();
     }
 };
 
@@ -414,7 +479,9 @@ int main() {
                 "merge <idx1> <idx2>\t\t\t\t merge idx2 to idx1: [idx1] = [idx1] <--- [idx2]\n"
                 "pagename <idx> <pagename> <new pagename>\t replace pagename to new pagename\n"
                 "save <idx> <filename>\t\t\t\t save idx to file\n"
-                "exit"
+
+                "dumpchars <idx>\t\t\t\t print all chars infos\n"
+                "exit\n"
                 ;
             continue;
         }
@@ -459,6 +526,13 @@ int main() {
                 ERROR("invalid idx");
             files[idx].file->SaveToFile(args[2].c_str());
             std::cout << "file saved\n";
+            continue;
+        }
+        if (m("dumpchars", 1)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            files[idx].file->dumpChars();
             continue;
         }
         if (m("exit", 0))
