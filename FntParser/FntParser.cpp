@@ -1,7 +1,7 @@
 ﻿/*
 MIT License
 
-Copyright(c) 2021 frto027
+Copyright(c) 2021-2024 frto027
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this softwareand associated documentation files(the "Software"), to deal
@@ -21,24 +21,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+#define _CRT_SECURE_NO_WARNINGS
 
 #include <iostream>
 #include <cstring>
 
-/*
 
-目前只是个简易的字体处理
-1.手动将原始fnt文件加一个下划线后缀（比如luamini.fnt改成luamini_.fnt）
-2.手动将原始png文件中所有文件名字的_换成-(比如luamini_0.png改成luamini-0.png)
-3.将新的字体放进当前文件夹（luamini.fnt）
-在同一文件夹内，执行exe文件，并输入字体名字（luamini.fnt），输入y，回车，会自动使用新的fnt替换luamini.fnt
-5.最后留下来的有luamini.fnt(合并后的fnt)，luamini-0.png（合并前的png），luamini_0.png（自己补充的png，其中原始字体有的字符位置不会被使用），原始的luamini_.fnt可以删除。
-（C语言写输入输出真费劲）
-
-
-*/
-
-#define ERROR(...) do{fprintf(stderr,__VA_ARGS__);exit(-1);}while(0)
+#define ERROR(...) do{fprintf(stderr,__VA_ARGS__);system("pause");exit(-1);}while(0)
 
 #pragma pack(push, 1)
 struct info {
@@ -93,6 +82,8 @@ struct kerning {
 };
 
 char buffer[1024 * 1024];
+#include <vector>
+#include <string>
 
 class FntFile {
 public:
@@ -102,6 +93,59 @@ public:
     chars* chars_ptr = NULL;
     kerning* kerning_ptr = NULL;
     unsigned int info_sz, common_sz, pages_sz, chars_sz, kerning_sz;
+
+    void pageNameToVec(std::vector<std::string> & vec) {
+        char buff[2048];
+        int end = 0;
+        for (int i = 0; i < pages_sz; i++) {
+            char ch = buff[end++] = pages_ptr->pageNames[i];
+            if (ch == '\0') {
+                vec.push_back(buff);
+                end = 0;
+            }
+        }
+        if (end != 0) {
+            buff[end++] = '\0';
+            vec.push_back(buff);
+        }
+    }
+    void vecToPageName(std::vector<std::string>& vec) {
+        int len = 0;
+        for (auto &s : vec) {
+            len += s.length() + 1;
+        }
+        if (len != pages_sz) {
+            free(pages_ptr);
+            pages_ptr = (pages*)malloc(len);
+        }
+        int i = 0;
+        for (auto& s : vec) {
+            for (char ch : s) {
+                pages_ptr->pageNames[i++] = ch;
+            }
+            pages_ptr->pageNames[i++] = '\0';
+        }
+        pages_sz = len;
+        if (i != len)
+            ERROR("length error");
+    }
+
+    void renamePage(std::string from, std::string to) {
+        bool found = false;
+        std::vector<std::string> vec;
+        pageNameToVec(vec);
+        for (int i = 0; i < vec.size(); i++) {
+            if (vec[i] == from) {
+                vec[i] = to;
+                found = true;
+            }
+        }
+        vecToPageName(vec);
+        if (found)
+            std::cout << "replaced\n";
+        else
+            std::cout << "page not found\n";
+    }
 
     void parseFntFile(const char* fname) {
 
@@ -127,9 +171,12 @@ public:
             case id:                                                \
                 if(ptr)                                             \
                     ERROR("Duplicate " #ptr "at file %s",fname);   \
-                fread(&sz,sizeof(int),1,f);                         \
+                printf("reading %d\n", id);fread(&sz,sizeof(int),1,f);                         \
                 if(sz < sizeof(type))                               \
-                    ERROR("size is too small(%s)",fname);           \
+                {\
+                    printf("Warning: the font you just read has some extra bytes. We will ignore them.\n");\
+                    break; \
+                }           \
                 ptr = (type *)malloc(sz);                           \
                 fread(ptr,sz,1,f);                                  \
             break;
@@ -176,7 +223,7 @@ public:
     void PrintFontName() {
         if (info_ptr == NULL)
             ERROR("invalid info");
-        printf("font name:%s\n", info_ptr->fontName);
+        printf("    font name:%s\n", info_ptr->fontName);
     }
     void PrintPageNames() {
         if (common_ptr == NULL)
@@ -184,10 +231,11 @@ public:
         if (pages_ptr == NULL)
             ERROR("Can't print empty page!");
         int n = 0;
-        printf("page count:%d\n", common_ptr->pages);
-        while (n < pages_sz) {
-            putchar(pages_ptr->pageNames[n] == '\0' ? '\n' : pages_ptr->pageNames[n]);
-            n++;
+        printf("    page count:%d\n", common_ptr->pages);
+        std::vector<std::string> pages;
+        pageNameToVec(pages);
+        for (auto& s : pages) {
+            printf("        %s\n", s.c_str());
         }
     }
     char* GetPageName(int i) {
@@ -308,6 +356,15 @@ public:
     }
 };
 
+#include <map>
+#include <vector>
+
+struct MapContent {
+    std::string filename;
+    FntFile* file = new FntFile();
+};
+std::vector<MapContent> files;
+
 int main() {
     //just runtime check, instead of static assert!
     if (sizeof(info) != 14) {
@@ -325,45 +382,88 @@ int main() {
     if (sizeof(kerning) != 10) {
         ERROR("invalid kerning size");
     }
-    char file_name[4096];
+    std::cout << "FNT file edit tools, by frto027.\ntype 'help' for help.\n";
+    while (1) {
+        std::cout << ">>> ";
+        std::cout.flush();
+        char cmdbuff[2048];
+        std::cin.getline(cmdbuff, sizeof(cmdbuff));
+        std::vector<std::string> args;
 
-    printf("1.add a '_' to original fnt file.(e.g. rename luamini.fnt -> luamini_.fnt)\n\n");
-    printf("2.replace all '_' in png file with '-'.(e.g. luamini_0.png -> luamini-0.png ........)\n\n");
-    printf("3.paste your new font here\n(e.g. now, current folder contains 'luamini_.fnt','luamini-0.png','luamini.fnt','luamini_0.png')\n\n");
-    printf("4.now, input your font name(e.g. input 'luamini.fnt'):\n");
-    scanf("%s", file_name);
-    int len = strlen(file_name);
-    if (len < 4 || (strcmp(&file_name[len-4],".fnt") != 0)) {
-        ERROR("wrong file name(must *.fnt)");
-    }
-    char file_name2[4097];
-    strcpy(file_name2, file_name);
-    strcpy(&file_name2[len - 4], "_.fnt");
-    printf("parse font file: %s = (%s - %s) + %s\n", file_name, file_name, file_name2, file_name2);
-    printf("input 'y' to continue, 'n' to exit:");
-    int ch;
-    while (true) {
-        ch = getchar();
-        if (ch == '\n' || ch == ' ')
+        char* p = strtok(cmdbuff, " ");
+        while (p) {
+            args.emplace_back(p);
+            p = strtok(NULL, " ");
+        }
+
+        if (args.size() == 0) {
             continue;
-        if (ch == 'y')
-            break;
-        if (ch == 'n')
+        }
+
+
+
+        auto cmd = args[0];
+        auto m = [&](const char* name, int argcount)->bool {
+            return cmd == name && args.size()-1 == argcount;
+         };
+        
+        if (m("help",0)) {
+            std::cout << "help\t\t\t\t\t\t print this message\n"
+                "read <filename>\t\t\t\t\t load file into memory\n"
+                "list\t\t\t\t\t\t list all files in memory\n"
+                "merge <idx1> <idx2>\t\t\t\t merge idx2 to idx1: [idx1] = [idx1] <--- [idx2]\n"
+                "pagename <idx> <pagename> <new pagename>\t replace pagename to new pagename\n"
+                "save <idx> <filename>\t\t\t\t save idx to file\n"
+                "exit"
+                ;
+            continue;
+        }
+        
+        if (m("read", 1)) {
+            auto idx = files.size();
+            files.push_back({});
+            files[idx].filename = args[1];
+            files[idx].file->parseFntFile(args[1].c_str());
+            std::cout << "read success, idx = " << idx << "\n";
+            continue;
+        }
+        if (m("list", 0)) {
+            int idx = 0;
+            for (auto it = files.begin(), end = files.end(); it != end; ++it) {
+                std::cout << "idx = " << idx++ << ", filename = " << it->filename<<'\n';
+                it->file->PrintFontName();
+                it->file->PrintPageNames();
+                std::cout << "    char count = " << it->file->CharCount() << "\n";
+            }
+            continue;
+        }
+        if (m("merge", 2)) {
+            int a = atoi(args[1].c_str());
+            int b = atoi(args[2].c_str());
+            if (a < 0 || b < 0 || a == b || a >= files.size() || b >= files.size())
+                ERROR("invalid idx");
+            files[a].file->ReplaceCharsUse(files[b].file);
+            std::cout << "[" << a << "] = [" << a << "] + [" << b << "]\n";
+            continue;
+        }
+        if (m("pagename", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            files[idx].file->renamePage(args[2], args[3]);
+            continue;
+        }
+        if (m("save", 2)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            files[idx].file->SaveToFile(args[2].c_str());
+            std::cout << "file saved\n";
+            continue;
+        }
+        if (m("exit", 0))
             return 0;
-        printf("input 'y' to continue, 'n' to exit:");
+        std::cout << "invalid command\n";
     }
-    {
-        FntFile fontA, fontB;
-        fontA.parseFntFile(file_name);
-        fontB.parseFntFile(file_name2);
-        fontB.ApplyReplacedRule();
-        fontA.ReplaceCharsUse(&fontB);
-        fontA.SaveToFile(file_name);
-    }
-    //    for(int i=0;i<255;i++){
-    //        printf("char:id=%u,%u\n",font.chars_ptr[i].id,font.chars_ptr[i].page);
-    //    }
-    printf("over\n");
-    system("pause");
     return 0;
 }
