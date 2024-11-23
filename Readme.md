@@ -1,8 +1,9 @@
-# 这是什么？
+# What's this?
 
-这是一个解析并处理`.fnt`格式字体的一个C++命令行程序，具备FNT贴图重命名、FNT文件合并的功能。
+This tool is a command line shell that enables you to edit `.fnt` file directly.
 
-在汉化`以撒的结合：胎衣+`的过程中，发现目前尚不存在一个能够很好处理`.fnt`格式字体的软件。由于找不到将游戏的原有fnt字体与新的字体互相整合的方式，编写了一个能够解析并处理`.fnt`格式字体的C++程序。
+You can use it to dump, edit, merge fnt files, or rename `.png` files it referenced.
+
 
 # 如何构建
 
