@@ -5,6 +5,8 @@ This tool is a command line shell that enables you to edit `.fnt` file directly.
 You can use it to dump, edit, merge fnt files, or rename `.png` files it referenced.
 
 
+[Release download](https://github.com/frto027/FntEditTool/releases)
+
 # 如何构建
 
 ~~程序目前只有专门的用途，并没有编写特别的接口，但可以修改main函数实现其它功能。~~
