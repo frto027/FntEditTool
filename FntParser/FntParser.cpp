@@ -23,6 +23,9 @@ SOFTWARE.
 */
 #define _CRT_SECURE_NO_WARNINGS
 
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 8
+
 #include <iostream>
 #include <cstring>
 #include <set>
@@ -472,7 +475,7 @@ int main() {
     if (sizeof(kerning) != 10) {
         ERROR("invalid kerning size");
     }
-    std::cout << "FNT file edit tools, by frto027.\ntype 'help' for help.\n";
+    std::cout << "FNT file edit tools ver "<<VERSION_MAJOR<<"."<<VERSION_MINOR<<", by frto027.\ntype 'help' for help.\n";
     while (1) {
         std::cout << ">>> ";
         std::cout.flush();
