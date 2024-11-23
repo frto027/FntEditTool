@@ -447,6 +447,47 @@ public:
             kerning_sz = 0;
         }
     }
+    void ListKern() {
+        for (int i = 0; i < kerning_sz / sizeof(kerning); i++) {
+            std::cout << "first=" << kerning_ptr[i].first << ", seconed=" << kerning_ptr[i].seconed << ", value=" << kerning_ptr[i].amount << "\n";
+        }
+    }
+    void ListKern(int id) {
+        for (int i = 0; i < kerning_sz / sizeof(kerning); i++) {
+            if (kerning_ptr[i].first == id || kerning_ptr[i].seconed == id) {
+                std::cout << "first=" << kerning_ptr[i].first << ", seconed=" << kerning_ptr[i].seconed << ", value=" << kerning_ptr[i].amount << "\n";
+            }
+        }
+    }
+
+    void EditKern(int first, int seconed, int value) {
+        int count = 0;
+        for (int i = 0; i < kerning_sz / sizeof(kerning); i++) {
+            if (kerning_ptr[i].first == first || kerning_ptr[i].seconed == seconed) {
+                kerning_ptr[i].amount = value;
+            }
+        }
+        if (count == 0) {
+            void* buff = malloc(kerning_sz + sizeof(kerning));
+            if (buff == nullptr) {
+                std::cout << "memory error!\n";
+                return;
+            }
+            if (kerning_sz) {
+                memcpy(buff, kerning_ptr, kerning_sz + sizeof(kerning));
+                free(kerning_ptr);
+            }
+            kerning_ptr = (kerning*)buff;
+            kerning_ptr[kerning_sz / sizeof(kerning)].first = first;
+            kerning_ptr[kerning_sz / sizeof(kerning)].seconed = seconed;
+            kerning_ptr[kerning_sz / sizeof(kerning)].amount = value;
+            kerning_sz += sizeof(kerning);
+            std::cout << "kerning info not found, new info has been created.";
+        }
+        else {
+            std::cout << count << " kerning info updated\n";
+        }
+    }
 };
 
 #include <map>
@@ -524,6 +565,9 @@ int main() {
                 "\n"
 
                 "rmkern <idx> \t\t\t remove kerning information for <idx>\n"
+                "kern <idx> \t\t\t\t dump all kerning infos\m"
+                "kern <idx> <char id> \t\t\t list all kerning info related to <char id>\n"
+                "kern <idx> <first char id> <seconed char id> <value>\t\t edit kern info to <value>\n"
                 ""
                 "dumpchars <idx>\t\t\t\t print all chars infos\n"
                 "exit\n"
@@ -546,7 +590,7 @@ int main() {
                 it->file->PrintFontName();
                 it->file->PrintPageNames();
                 std::cout << "    char count = " << it->file->CharCount() << "\n";
-                std::cout << "    kerning size = " << it->file->kerning_sz << "\n";
+                std::cout << "    kerning size = " << it->file->kerning_sz << ", count=" <<(it->file->kerning_sz/sizeof(kerning)) << "\n";
             }
             continue;
         }
@@ -711,6 +755,32 @@ int main() {
             if (idx < 0 || idx >= files.size())
                 ERROR("invalid idx");
             files[idx].file->RemoveKerning();
+            continue;
+        }
+        if (m("kern", 1)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            files[idx].file->ListKern();
+            continue;
+        }
+        if (m("kern", 2)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int first = atoi(args[2].c_str());
+            files[idx].file->ListKern(first);
+            continue;
+        }
+        if (m("kern", 4)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int first = atoi(args[2].c_str());
+            int seconed = atoi(args[3].c_str());
+            int value = atoi(args[4].c_str());
+
+            files[idx].file->EditKern(first, seconed, value);
             continue;
         }
 
