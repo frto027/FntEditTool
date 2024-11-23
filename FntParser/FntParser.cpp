@@ -348,6 +348,23 @@ public:
     int CharCount() {
         return chars_sz / sizeof(chars);
     }
+
+    template<typename F>
+    void forEachChars(F f) {
+        int c = CharCount();
+        for (int i = 0; i < c; i++) {
+            f(chars_ptr[i]);
+        }
+    }
+
+    template<typename F>
+    void updateChars(int idx, F f) {
+        forEachChars([&](chars& ch) {
+            if (ch.id == idx) {
+                f(ch);
+            }
+            });
+    }
     void ReplaceCharsUse(FntFile* other) {
         int myCount = CharCount();
         int oCount = other->CharCount();
@@ -419,6 +436,14 @@ public:
         vecToPageName(this_page_names);
         common_ptr->pages = this_page_names.size();
     }
+
+    void RemoveKerning() {
+        if (kerning_ptr) {
+            free(kerning_ptr);
+            kerning_ptr = nullptr;
+            kerning_sz = 0;
+        }
+    }
 };
 
 #include <map>
@@ -480,6 +505,23 @@ int main() {
                 "pagename <idx> <pagename> <new pagename>\t replace pagename to new pagename\n"
                 "save <idx> <filename>\t\t\t\t save idx to file\n"
 
+                "xoff <idx> <offset>\t\t\t add <offset> to every chars xoffset inside <idx> e.g. xoff 0 -3\n"
+                "yoff <idx> <offset>\t\t\t add <offset> to every chars yoffset inside <idx> e.g. yoff 0 -3\n"
+                "xadv <idx> <offset>\t\t\t add <offset> to every chars xadv inside <idx> e.g. xadv 0 -3\n"
+
+                "\n"
+                "x= <idx> <char id> <value> \t\t\t set x=<value> for <char id> inside <idx>\n"
+                "y= <idx> <char id> <value> \t\t\t set y=<value> for <char id> inside <idx>\n"
+                "w= <idx> <char id> <value> \t\t\t set width=<value> for <char id> inside <idx>\n"
+                "h= <idx> <char id> <value> \t\t\t set height=<value> for <char id> inside <idx>\n"
+                "page= <idx> <char id> <value> \t\t\t set page=<value> for <char id> inside <idx>\n"
+                "xoff= <idx> <char id> <value> \t\t\t set xoff=<value> for <char id> inside <idx>\n"
+                "yoff= <idx> <char id> <value> \t\t\t set yoff=<value> for <char id> inside <idx>\n"
+                "xadv= <idx> <char id> <value> \t\t\t set xadv=<value> for <char id> inside <idx>\n"
+                "\n"
+
+                "rmkern <idx> \t\t\t remove kerning information for <idx>\n"
+                ""
                 "dumpchars <idx>\t\t\t\t print all chars infos\n"
                 "exit\n"
                 ;
@@ -501,6 +543,7 @@ int main() {
                 it->file->PrintFontName();
                 it->file->PrintPageNames();
                 std::cout << "    char count = " << it->file->CharCount() << "\n";
+                std::cout << "    kerning size = " << it->file->kerning_sz << "\n";
             }
             continue;
         }
@@ -535,6 +578,139 @@ int main() {
             files[idx].file->dumpChars();
             continue;
         }
+        if (m("xoff", 2)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int num = atoi(args[2].c_str());
+            printf("all offset for idx=%d -> xoffset = xoffset + (%d)\n", idx, num);
+            files[idx].file->forEachChars([&](chars& ch) {
+                ch.xoffset += num;
+                });
+            continue;
+        }
+        if (m("yoff", 2)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int num = atoi(args[2].c_str());
+            printf("all offset for idx=%d -> yoffset = yoffset + (%d)\n", idx, num);
+            files[idx].file->forEachChars([&](chars& ch) {
+                ch.yoffset += num;
+                });
+            continue;
+        }
+        if (m("xadv", 2)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int num = atoi(args[2].c_str());
+            printf("all offset for idx=%d -> xadvance = xadvance + (%d)\n", idx, num);
+            files[idx].file->forEachChars([&](chars& ch) {
+                ch.xadvance += num;
+                });
+            continue;
+        }
+        if (m("x=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.x = num;
+                });
+            continue;
+        }
+        if (m("y=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.y = num;
+                });
+            continue;
+        }
+        if (m("w=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.width = num;
+                });
+            continue;
+        }
+        if (m("h=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.height = num;
+                });
+            continue;
+        }
+        if (m("xoff=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.xoffset = num;
+                });
+            continue;
+        }
+        if (m("yoff=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.yoffset = num;
+                });
+            continue;
+        }
+        if (m("xadv=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.xadvance = num;
+                });
+            continue;
+        }
+        if (m("page=", 3)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            int id = atoi(args[2].c_str());
+            int num = atoi(args[3].c_str());
+            if (num < 0 || num >= files[idx].file->common_ptr->pages) {
+                printf("page not exists.\n");
+                continue;
+            }
+            files[idx].file->updateChars(idx, [&](chars& ch) {
+                ch.page = num;
+                });
+            continue;
+        }
+        if (m("rmkern", 1)) {
+            int idx = atoi(args[1].c_str());
+            if (idx < 0 || idx >= files.size())
+                ERROR("invalid idx");
+            files[idx].file->RemoveKerning();
+            continue;
+        }
+
         if (m("exit", 0))
             return 0;
         std::cout << "invalid command\n";
